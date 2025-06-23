@@ -324,6 +324,7 @@ demonter_tous_les_sshfs_a_la_sortie() {
 
 # Démonter SSHFS en fin d’exécution ou interruption
 cleanup_sshfs() {
+     cleanup_sshfs
     for mount_point in "$MONTAGE_SSHFS_PHOTOS" "$MONTAGE_SSHFS_IMAGES" "$MONTAGE_SSHFS_MUSIQUES"; do
         if mountpoint -q "$mount_point"; then
             log_info "Démontage de SSHFS sur $mount_point..."
