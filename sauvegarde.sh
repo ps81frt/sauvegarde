@@ -28,6 +28,8 @@ else
     exit 1
 fi
 
+validate_critical_vars
+
 # --- INTÉGRATION DU FICHIER DE DIAGNOSTIC (fonctions_erreur.sh) ---
 # Le chemin est maintenant défini dans config.sh et est relatif.
 if [ -f "$CHEMIN_FONCTIONS_ERREUR" ]; then
@@ -87,6 +89,27 @@ log_success "Verrou acquis sur le fichier: $LOCK_FILE"
 
 # --- FONCTIONS GÉNÉRALES ---
 
+# Contrôle des variable CRITIQUE
+validate_critical_vars() {
+    [[ -n "${UUID_DISQUE_SAUVEGARDE}" ]] || { echo "Erreur : UUID_DISQUE_SAUVEGARDE non défini."; exit 1; }
+    [[ -n "${DEST_BASE_SAUVEGARDES}" ]] || { echo "Erreur : DEST_BASE_SAUVEGARDES non défini."; exit 1; }
+    [[ -n "${DEFAULT_RSYNC_OPTIONS}" ]] || { echo "Erreur : DEFAULT_RSYNC_OPTIONS non défini."; exit 1; }
+    [[ -n "${DEFAULT_TYPE_CONNEXION_DISTANTE}" ]] || { echo "Erreur : DEFAULT_TYPE_CONNEXION_DISTANTE non défini."; exit 1; }
+    [[ -n "${DEFAULT_SELECTIONS_SAUVEGARDES}" ]] || { echo "Erreur : DEFAULT_SELECTIONS_SAUVEGARDES non défini."; exit 1; }
+    [[ -n "${MONTAGE_SSHFS_PHOTOS}" ]] || { echo "Erreur : MONTAGE_SSHFS_PHOTOS non défini."; exit 1; }
+    [[ -n "${MONTAGE_SSHFS_IMAGES}" ]] || { echo "Erreur : MONTAGE_SSHFS_IMAGES non défini."; exit 1; }
+    [[ -n "${MONTAGE_SSHFS_MUSIQUES}" ]] || { echo "Erreur : MONTAGE_SSHFS_MUSIQUES non défini."; exit 1; }
+    [[ -n "${userVM}" ]] || { echo "Erreur : userVM non défini."; exit 1; }
+    [[ -n "${ipVM}" ]] || { echo "Erreur : ipVM non défini."; exit 1; }
+    [[ -n "${portVM}" ]] || { echo "Erreur : portVM non défini."; exit 1; }
+    [[ -n "${userPortable}" ]] || { echo "Erreur : userPortable non défini."; exit 1; }
+    [[ -n "${ipPortable}" ]] || { echo "Erreur : ipPortable non défini."; exit 1; }
+    [[ -n "${portPortable}" ]] || { echo "Erreur : portPortable non défini."; exit 1; }
+    [[ -n "${pathPortable}" ]] || { echo "Erreur : pathPortable non défini."; exit 1; }
+    [[ -n "${userServeur}" ]] || { echo "Erreur : userServeur non défini."; exit 1; }
+    [[ -n "${ipServeur}" ]] || { echo "Erreur : ipServeur non défini."; exit 1; }
+    [[ -n "${portServeur}" ]] || { echo "Erreur : portServeur non défini."; exit 1; }
+}
 # Fonction pour trouver le dernier répertoire de sauvegarde incremental pour --link-dest
 # Cherche le répertoire daté le plus récent (AAAA-MM-JJ) dans un chemin de base donné.
 # Arguments: $1 = chemin de base ou chercher (ex: /media/disk/SAUVEGARDES/incremental-DocumentsEric/)
