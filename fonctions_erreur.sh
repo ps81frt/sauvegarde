@@ -80,38 +80,10 @@ diagnostiquer_et_logger_erreur() {
 # --- Fonction de detection de variables INVALIDE  --
 validate_critical_vars() {
     local missing=0
-    local vars=(
-        UUID_DISQUE_SAUVEGARDE
-        DEST_BASE_SAUVEGARDES
-        DEFAULT_RSYNC_OPTIONS
-        DEFAULT_TYPE_CONNEXION_DISTANTE
-        DEFAULT_SELECTIONS_SAUVEGARDES
-        MONTAGE_SSHFS_PHOTOS
-        MONTAGE_SSHFS_IMAGES
-        MONTAGE_SSHFS_MUSIQUES
-        userVM
-        ipVM
-        portVM
-        userPortable
-        ipPortable
-        portPortable
-        pathPortable
-        userServeur
-        ipServeur
-        portServeur
-    )
-
-    for var in "${vars[@]}"; do
-        if [ -z "${!var}" ]; then
-            log_error "Erreur : $var non défini."
-            missing=1
-        fi
-    done
-
-    if [ $missing -eq 1 ]; then
-        log_error "ARRÊT du script à cause de variables manquantes."
-        exit 1
-    fi
+    local vars=(UUID_DISQUE_SAUVEGARDE DEST_BASE_SAUVEGARDES DEFAULT_RSYNC_OPTIONS DEFAULT_TYPE_CONNEXION_DISTANTE DEFAULT_SELECTIONS_SAUVEGARDES MONTAGE_SSHFS_PHOTOS MONTAGE_SSHFS_IMAGES MONTAGE_SSHFS_MUSIQUES userVM ipVM portVM userPortable ipPortable portPortable pathPortable userServeur ipServeur portServeur)
+    for var in "${vars[@]}"; do [ -z "${!var}" ] && { log_error "Erreur : $var non défini."; missing=1; }; done
+    [ $missing -eq 1 ] && { log_error "ARRÊT du script à cause de variables manquantes."; exit 1; }
+    log_info "Toutes les variables critiques sont correctement définies."
 }
 
 # --- Fonction de gestion des erreurs FATALES --
