@@ -296,14 +296,14 @@ monter_sshfs() {
     fi
 }
 
-# # Detection de la commande fusermount
+# Detection de la commande fusermount
 detect_fusermount_cmd() {
     if command -v fusermount3 >/dev/null 2>&1; then
         echo "fusermount3"
     elif command -v fusermount >/dev/null 2>&1; then
         echo "fusermount"
     else
-        echo ""
+        echo ""Aucune commande fusermount disponible." >&2"
     fi
 }
 
@@ -355,11 +355,10 @@ demonter_tous_les_sshfs_a_la_sortie() {
 
 # Démonter SSHFS en fin d’exécution ou interruption
 cleanup_sshfs() {
-     cleanup_sshfs
     for mount_point in "$MONTAGE_SSHFS_PHOTOS" "$MONTAGE_SSHFS_IMAGES" "$MONTAGE_SSHFS_MUSIQUES"; do
         if mountpoint -q "$mount_point"; then
-            log_info "Démontage de SSHFS sur $mount_point..."
-            fusermount -u "$mount_point" || fusermount3 -u "$mount_point"
+             log_info "Démontage de SSHFS sur $mount_point..."
+             fusermount -u "$mount_point" || fusermount3 -u "$mount_point"
         fi
     done
 }
@@ -367,6 +366,7 @@ cleanup_sshfs() {
 # Assurez-vous que demonter_tous_les_sshfs_a_la_sortie est appele a la sortie du script
 # C'est une excellente pratique pour garantir le nettoyage.
 trap demonter_tous_les_sshfs_a_la_sortie EXIT
+trap cleanup_sshfs EXIT
 
 # --- Fonctions de Sauvegarde ---
 
