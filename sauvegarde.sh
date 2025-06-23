@@ -105,6 +105,8 @@ check_dependencies() {
 }
 # Contrôle des variables CRITIQUE
 validate_critical_vars() {
+    local missing=0
+    
     [[ -n "${UUID_DISQUE_SAUVEGARDE}" ]] || { echo "Erreur : UUID_DISQUE_SAUVEGARDE non défini."; exit 1; }
     [[ -n "${DEST_BASE_SAUVEGARDES}" ]] || { echo "Erreur : DEST_BASE_SAUVEGARDES non défini."; exit 1; }
     [[ -n "${DEFAULT_RSYNC_OPTIONS}" ]] || { echo "Erreur : DEFAULT_RSYNC_OPTIONS non défini."; exit 1; }
@@ -123,6 +125,11 @@ validate_critical_vars() {
     [[ -n "${userServeur}" ]] || { echo "Erreur : userServeur non défini."; exit 1; }
     [[ -n "${ipServeur}" ]] || { echo "Erreur : ipServeur non défini."; exit 1; }
     [[ -n "${portServeur}" ]] || { echo "Erreur : portServeur non défini."; exit 1; }
+
+    if [ $missing -eq 1 ]; then
+        echo "ARRÊT du script à cause de variables manquantes."
+        exit 1
+    fi
 }
 # Fonction pour trouver le dernier répertoire de sauvegarde incremental pour --link-dest
 # Cherche le répertoire daté le plus récent (AAAA-MM-JJ) dans un chemin de base donné.
