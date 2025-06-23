@@ -89,7 +89,7 @@ log_success "Verrou acquis sur le fichier: $LOCK_FILE"
 
 # --- FONCTIONS GÉNÉRALES ---
 
-# Contrôle des variable CRITIQUE
+# Contrôle des variables CRITIQUE
 validate_critical_vars() {
     [[ -n "${UUID_DISQUE_SAUVEGARDE}" ]] || { echo "Erreur : UUID_DISQUE_SAUVEGARDE non défini."; exit 1; }
     [[ -n "${DEST_BASE_SAUVEGARDES}" ]] || { echo "Erreur : DEST_BASE_SAUVEGARDES non défini."; exit 1; }
