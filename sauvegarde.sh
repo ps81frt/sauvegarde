@@ -1,5 +1,5 @@
 #!/bin/bash
-
+export LC_ALL=C
 #===============================================================
 # Sauvegarde des données
 # Auteur : enRIKO (modifié par geole, iznobe, Watael, steph810 pour production)
@@ -296,6 +296,23 @@ monter_sshfs() {
     fi
 }
 
+# # Detection de la commande fusermount
+detect_fusermount_cmd() {
+    if command -v fusermount3 >/dev/null 2>&1; then
+        echo "fusermount3"
+    elif command -v fusermount >/dev/null 2>&1; then
+        echo "fusermount"
+    else
+        echo ""
+    fi
+}
+
+FUSERMOUNT_CMD=$(detect_fusermount_cmd)
+
+if [[ -z "$FUSERMOUNT_CMD" ]]; then
+    echo "Erreur critique : ni fusermount ni fusermount3 n'est disponible sur ce système." >&2
+    exit 1
+fi
 demonter_sshfs() {
     local mount_point="$1"
     log_debug "Tentative de demontage SSHFS de $mount_point"
