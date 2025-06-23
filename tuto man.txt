@@ -1,0 +1,10 @@
+# Ajout man
+
+sudo mkdir -p /usr/local/share/man/man1/ # Crée le dossier si absent.
+sudo cp sauvegarde_automatique.man /usr/local/share/man/man1/ # Copie le manuel.
+sudo gzip -f /usr/local/share/man/man1/sauvegarde_automatique.man # Compresse (force pour écraser si déjà là).
+sudo mandb # Met à jour la base de données
+
+# Suppression man
+sudo rm /usr/local/share/man/man1/sauvegarde_automatique.1.gz
+sudo mandb

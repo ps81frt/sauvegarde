@@ -1,0 +1,162 @@
+MANUEL D'UTILISATION DU SCRIPT DE SAUVEGARDE `sauvegarde.sh`
+
+Date: 23 Juin 2025
+Version du script: 6.0
+
+---
+
+TABLE DES MATIÈRES
+
+1.  Introduction
+2.  Fonctionnalités Clés
+3.  Pré-requis
+4.  Installation des Fichiers
+5.  Configuration Initiale (`config.sh`)
+    5.1. Options Globales du Script
+    5.2. Informations d'Accès SSH
+    5.3. Chemins des Sources et Destinations
+    5.4. Politiques de Rétention
+    5.5. Points de Montage SSHFS (si SSHFS est utilisé)
+    5.6. Autres Chemins et Logs
+6.  Utilisation du Script
+    6.1. Exécution Manuelle
+    6.2. Exécution Automatisée (Cron)
+    6.3. Sélections de Sauvegardes
+7.  Exemples Pratiques
+8.  Diagnostic et Dépannage
+    8.1. Étapes de Diagnostic Générales
+    8.2. Problèmes Courants et Leurs Solutions
+    8.3. Techniques de Débogage Avancées
+
+---
+
+1. INTRODUCTION
+
+Le script `sauvegarde.sh` (version 5.4) est un outil Bash robuste et flexible conçu pour automatiser la sauvegarde de vos données importantes. Il gère la sauvegarde de fichiers locaux ainsi que des fichiers situés sur des hôtes distants (machines virtuelles, ordinateurs portables, serveurs) via SSH.
+
+Il utilise `rsync` avec l'option `--link-dest` pour des sauvegardes incrémentales, ce qui optimise l'espace disque et le temps d'exécution en créant des liens durs vers les fichiers inchangés de la sauvegarde précédente.
+
+Ce manuel vous guidera à travers l'installation, la configuration, l'utilisation, et le dépannage du script pour vous aider à mettre en place une solution de sauvegarde fiable.
+
+---
+
+2. FONCTIONNALITÉS CLÉS
+
+* **Sauvegardes Incrémentales Optimisées:** Gain d'espace et de temps grâce à `rsync --link-dest`.
+* **Sauvegardes Locales et Distantes:** Supporte les sources sur votre machine et via SSH.
+* **Rétention Granulaire:** Nettoyage automatique des anciennes sauvegardes avec des politiques quotidiennes, hebdomadaires et mensuelles configurables par catégorie.
+* **Sécurité Renforcée:** Vérification de l'UUID du disque de destination pour éviter les erreurs, et utilisation de verrous (`flock`) pour prévenir les exécutions concurrentes.
+* **Notifications par Email:** Rapports de sauvegarde envoyés par email.
+* **Journalisation Détaillée:** Système de logs complet pour le suivi des opérations, avec un mode débogage pour les analyses approfondies.
+* **Diagnostic d'Erreurs Avancé:** Messages d'erreur clairs avec "pistes" et "actions" pour faciliter le dépannage.
+* **Configuration Centralisée:** Toutes les options modifiables sont regroupées dans `config.sh`.
+* **Modularité:** Script divisé en `sauvegarde.sh` (logique), `config.sh` (configuration), et `fonctions_erreur.sh` (gestion d'erreurs).
+
+---
+
+3. PRÉ-REQUIS
+
+Pour que le script fonctionne correctement, les éléments suivants doivent être installés et configurés sur votre système :
+
+* **Paquets Logiciels :**
+    * `bash` (version 4.0 ou supérieure recommandée)
+    * `rsync`
+    * `ssh`
+    * `mail` ou `mailx` (pour les notifications email)
+    * `flock` (généralement inclus avec `util-linux`)
+    * `ping`
+    * `awk`
+    * `sed`
+    * `findmnt` (généralement inclus avec `util-linux`)
+    * `blkid` (généralement inclus avec `util-linux`)
+    * `sshfs` (uniquement si `DEFAULT_TYPE_CONNEXION_DISTANTE` est mis à `0` dans `config.sh`. Installez-le avec `sudo apt install sshfs` sur Debian/Ubuntu ou équivalent).
+
+* **Accès SSH sans mot de passe :**
+    * Pour les sauvegardes distantes, vous devez configurer l'authentification par clés SSH entre la machine exécutant le script et les hôtes distants.
+    * Générez une paire de clés SSH sur la machine de sauvegarde (`ssh-keygen`).
+    * Copiez la clé publique sur les machines distantes (`ssh-copy-id votre_utilisateur@ip_distante`).
+
+* **Disque de Sauvegarde :**
+    * Un disque externe (ou un emplacement réseau monté localement) qui servira de destination pour les sauvegardes.
+    * Ce disque doit être formaté et monté sur le chemin spécifié par `DEST_BASE_SAUVEGARDES` dans `config.sh`.
+    * Notez l'UUID de ce disque (`sudo blkid` ou `lsblk -f`) car il sera utilisé pour une vérification de sécurité.
+
+* **Permissions :**
+    * L'utilisateur exécutant le script doit avoir les permissions de lecture sur les répertoires sources.
+    * Il doit avoir les permissions de lecture, écriture et suppression sur le répertoire de destination (`DEST_BASE_SAUVEGARDES`) et le répertoire de logs (`LOG_DIR`).
+
+---
+
+4. INSTALLATION DES FICHIERS
+
+1.  **Téléchargez les fichiers :** Assurez-vous que les trois fichiers `sauvegarde.sh`, `config.sh`, et `fonctions_erreur.sh` sont présents dans le même répertoire.
+2.  **Rendez le script exécutable :**
+    ```bash
+    chmod +x sauvegarde.sh
+    ```
+3.  **Créez les répertoires nécessaires :**
+    Le script créera automatiquement les sous-répertoires de destination des sauvegardes, mais vous devrez vous assurer que :
+    * Le répertoire de base des sauvegardes (`DEST_BASE_SAUVEGARDES`) existe et est monté.
+    * Le répertoire de logs (`LOG_DIR`) existe et est accessible en écriture.
+    * Le répertoire de base pour les montages SSHFS (`BASE_MONTAGE_SSHFS`) existe si vous utilisez SSHFS.
+
+---
+
+5. CONFIGURATION INITIALE (`config.sh`)
+
+Le fichier `config.sh` est le cœur de la configuration. **Vous DEVEZ l'éditer** pour l'adapter à votre environnement. Ouvrez-le avec votre éditeur de texte préféré (ex: `nano config.sh` ou `vim config.sh`).
+
+Les variables sont regroupées par sections pour faciliter la navigation.
+
+### 5.1. Options Globales du Script
+
+* `DEFAULT_NOM_SCRIPT`: Nom de base du script, utilisé pour le fichier de verrouillage. Laissez la valeur par défaut.
+* `EMAIL_NOTIFICATION`: Votre adresse email pour les rapports. Laissez `""` pour désactiver.
+* `ESPACE_DISQUE_MIN_GO`: Espace minimum requis sur le disque de destination (en Go).
+* `DEFAULT_RSYNC_OPTIONS`: Options passées à `rsync`. Adaptez les `--exclude` pour ignorer les fichiers inutiles.
+    * **Recommandé :** `-avh --info=progress2 --exclude '*/.Trash-*' --exclude '*.bak' --exclude '*~' --exclude 'Thumbs.db' --exclude '.DS_Store' --exclude 'lost+found'`
+* `DEFAULT_MODE_DEBOGAGE`: `0` (désactivé) ou `1` (activé). Mettez `1` pour dépanner, puis remettez `0`.
+* `DEFAULT_TYPE_CONNEXION_DISTANTE`: `0` pour SSHFS (recommandé pour la robustesse) ou `1` pour SSH direct.
+* `DEFAULT_JOURNAUX_DESACTIVES`: `0` (journalisation activée, recommandé) ou `1` (journalisation désactivée).
+* `DEFAULT_SELECTIONS_SAUVEGARDES`: Les sauvegardes à exécuter par défaut si aucun argument n'est passé au script (ex: `"1 8"` ou `"all"`).
+* `DEFAULT_MODE_INCREMENTAL`: `0` pour une sauvegarde complète (synchronisation) ou `1` pour incrémentale (nouvel horodatage avec liens durs, **recommandé**).
+
+### 5.2. Informations d'Accès SSH
+
+Renseignez les utilisateurs, IPs, et ports pour vos machines distantes (VM, Portable, Serveur).
+Ex: `userVM="votre_user_vm"`, `ipVM="192.168.1.100"`, `portVM="22"`
+
+### 5.3. Chemins des Sources et Destinations
+
+* `DEST_BASE_SAUVEGARDES`: **CHEMIN ABSOLU** vers le point de montage de votre disque de sauvegarde principal.
+    Ex: `/media/utilisateur/MonDisqueSauvegarde`
+* `UUID_DISQUE_SAUVEGARDE`: **UUID** de votre disque de sauvegarde. **TRÈS IMPORTANT pour la sécurité.** Utilisez `sudo blkid` ou `lsblk -f` pour le trouver.
+* `SOURCE_LOCAL_...`: Chemins absolus des répertoires à sauvegarder sur votre machine locale.
+* `SOURCE_DIST_...`: Chemins absolus des répertoires à sauvegarder sur vos machines distantes (sur la machine distante elle-même).
+* `DEST_MAIN_...`: Chemins de destination pour les sauvegardes complètes (mode 0).
+* `DEST_INCR_BASE_...`: Chemins de base pour les sauvegardes incrémentales (mode 1). Le script créera des sous-dossiers horodatés ici.
+
+### 5.4. Politiques de Rétention
+
+Définissez le nombre de jours/semaines/mois de rétention pour chaque catégorie de sauvegarde (quotidienne, hebdomadaire, mensuelle). Mettez `0` pour désactiver un niveau de rétention.
+Ex: `JOURS_RETENTION_DOCS_ERIC_QUOTIDIEN=7`, `JOURS_RETENTION_DOCS_ERIC_HEBDO=4`, `JOURS_RETENTION_DOCS_ERIC_MENSUEL=6`
+
+### 5.5. Points de Montage SSHFS (si `DEFAULT_TYPE_CONNEXION_DISTANTE=0`)
+
+* `BASE_MONTAGE_SSHFS`: Répertoire sur votre machine locale où les montages SSHFS temporaires seront créés. Ex: `/tmp/sshfs_mounts`
+* `MONTAGE_SSHFS_...`: Points de montage spécifiques pour chaque source distante. Le script les gère automatiquement.
+
+### 5.6. Autres Chemins et Logs
+
+* `LOG_DIR`: Répertoire où les fichiers de log seront stockés (ex: `/var/log/sauvegardes`). Assurez-vous d'avoir les permissions d'écriture.
+
+---
+
+6. UTILISATION DU SCRIPT
+
+### 6.1. Exécution Manuelle
+
+Naviguez vers le répertoire où se trouve `sauvegarde.sh` et exécutez-le.
+
+```bash
+./sauvegarde.sh [selection...]
