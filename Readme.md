@@ -30,49 +30,60 @@ Organisez les fichiers dans un répertoire comme suit :
 ```bash
 sudo mkdir -p /opt/sauvegarde
 
-
+'''
 2. Télécharger les fichiers
-
+```bash
 cd /opt/sauvegarde
 
 sudo curl -O https://raw.githubusercontent.com/ps81frt/sauvegarde/refs/heads/main/sauvegarde.sh
 sudo curl -O https://raw.githubusercontent.com/ps81frt/sauvegarde/refs/heads/main/config.sh
 sudo curl -O https://raw.githubusercontent.com/ps81frt/sauvegarde/refs/heads/main/fonctions_erreur.sh
 sudo curl -O https://raw.githubusercontent.com/ps81frt/sauvegarde/refs/heads/main/README.md
+'''
+
 3. Rendre le script exécutable
 
+```bash
 sudo chmod +x sauvegarde.sh
+'''
+
 🚀 Utilisation
+
 1. Configurer config.sh
 
+```bash
 sudo nano /opt/sauvegarde/config.sh
+'''
   ➤ Modifiez les chemins à sauvegarder, les destinations, etc.
 
 2. Lancer manuellement
-
+```bash
 cd /opt/sauvegarde
 sudo ./sauvegarde.sh
-
+'''
 
 ⏰ Automatiser avec Cron
 
 
 Exemple pour exécuter la sauvegarde chaque jour à 2h00 du matin :
 
-
+****
 sudo crontab -e
-
+'''
 
 Ajoutez la ligne suivante :
-
+```bash
 0 2 * * * /opt/sauvegarde/sauvegarde.sh >> /var/log/sauvegarde.log 2>&1
+'''
+
 🔐 Sécurité
+
 Protégez l’accès aux fichiers :
 
-
+```bash
 sudo chown -R root:root /opt/sauvegarde
 sudo chmod -R 700 /opt/sauvegarde
-
+'''
 
 🧪 Tests recommandés
 
