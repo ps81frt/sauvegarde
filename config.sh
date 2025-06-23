@@ -55,7 +55,7 @@ portVM="22"           # Port SSH de la VM
 userPortable="fanou" # Nom d'utilisateur SSH sur le portable
 ipPortable="192.168.1.60"    # Adresse IP du portable
 portPortable="22"            # Port SSH du portable
-pathPortable="/home/votre_utilisateur_portable/" # Chemin de base des données sur le portable
+pathPortable="" # Chemin de base des données sur le portable
 
 # Accès au Serveur
 userServeur="devUser" # Nom d'utilisateur SSH sur le serveur
