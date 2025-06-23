@@ -28,7 +28,11 @@ else
     exit 1
 fi
 
+# Validation variables critiques
 validate_critical_vars
+
+# Vérification des dépendances
+check_dependencies
 
 # --- INTÉGRATION DU FICHIER DE DIAGNOSTIC (fonctions_erreur.sh) ---
 # Le chemin est maintenant défini dans config.sh et est relatif.
@@ -89,6 +93,16 @@ log_success "Verrou acquis sur le fichier: $LOCK_FILE"
 
 # --- FONCTIONS GÉNÉRALES ---
 
+# Check des dependences
+check_dependencies() {
+    local deps=("rsync" "flock" "sshfs")
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" >/dev/null 2>&1; then
+            echo "ERREUR CRITIQUE : Dépendance manquante : $dep" >&2
+            exit 1
+        fi
+    done
+}
 # Contrôle des variables CRITIQUE
 validate_critical_vars() {
     [[ -n "${UUID_DISQUE_SAUVEGARDE}" ]] || { echo "Erreur : UUID_DISQUE_SAUVEGARDE non défini."; exit 1; }
