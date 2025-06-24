@@ -1,0 +1,546 @@
+.TH SAUVEGARDE 1 "24 June 2025" "6.1 Beta" "Script de Sauvegarde Personnelle"
+.SH NAME
+sauvegarde - script Bash robuste et complet pour la sauvegarde incrémentale de fichiers locaux et distants, avec gestion de la rétention et diagnostics avancés
+
+.SH SYNOPSIS
+.B sauvegarde
+[\fB--dry-run\fR] [\fB--list\fR] [\fIselection\fR... | \fBall\fR]
+
+.SH DESCRIPTION
+Le script
+.B sauvegarde
+, version 6.1 Beta, est un outil Bash puissant, flexible et hautement configurable, conçu pour automatiser la sauvegarde de vos données importantes. Il gère à la fois les fichiers stockés localement sur votre machine et ceux présents sur des hôtes distants (machines virtuelles, ordinateurs portables, serveurs) via SSH ou SSHFS.
+
+Ce script s'appuie sur
+.B rsync
+(1) pour effectuer des sauvegardes incrémentales intelligentes, utilisant l'option
+.B --link-dest
+pour optimiser l'espace disque et le temps d'exécution. Seules les modifications ou les nouveaux fichiers sont copiés, tandis que les fichiers inchangés sont liés en dur (hard-linked) à la sauvegarde précédente, réduisant ainsi l'utilisation de l'espace disque.
+
+Cette version a été améliorée pour une qualité irréprochable, avec une validation renforcée des paramètres, un mode de simulation (--dry-run), une option pour lister les sauvegardes disponibles (--list), une gestion configurable de l'option rsync --delete, et des diagnostics d'erreurs encore plus précis. Le script est structuré en fonctions modulaires, centralise la configuration dans
+.B config.sh
+, et intègre des vérifications de sécurité (comme l'UUID du disque) pour une fiabilité maximale.
+
+Le script est conçu pour être exécuté manuellement ou via un planificateur de tâches comme
+.B cron
+(8).
+
+.SH FONCTIONNALITÉS PRINCIPALES
+.IP \(bu 4
+\fBSauvegardes Incrémentales Optimisées\fR: Utilisation intelligente de
+.B rsync
+avec
+.B --link-dest
+pour des sauvegardes rapides et économes en espace.
+.IP \(bu 4
+\fBSauvegardes Locales et Distantes\fR: Prise en charge des sources locales et distantes via SSHFS ou rsync direct via SSH.
+.IP \(bu 4
+\fBMode Simulation (--dry-run)\fR: Permet de tester les opérations sans modifier les données.
+.IP \(bu 4
+\fBListe des Sauvegardes (--list)\fR: Affiche les catégories de sauvegardes disponibles sans exécuter de sauvegarde.
+.IP \(bu 4
+\fBGestion de la Rétention Granulaire\fR: Nettoyage automatique des anciennes sauvegardes selon des politiques quotidiennes, hebdomadaires et mensuelles.
+.IP \(bu 4
+\fBSécurité Renforcée\fR: Vérification de l'UUID du disque, verrouillage via
+.B flock
+(1) pour éviter les exécutions concurrentes, et validation des variables critiques (UUID, IP, chemins).
+.IP \(bu 4
+\fBNotifications par Email\fR: Rapports détaillés envoyés par email, incluant les erreurs spécifiques et l'état du mode dry-run.
+.IP \(bu 4
+\fBJournalisation Détaillée\fR: Logs horodatés pour toutes les opérations, avec journalisation des erreurs critiques même si les logs sont désactivés.
+.IP \(bu 4
+\fBDiagnostic d'Erreurs Avancé\fR: Messages clairs avec pistes de résolution pour les erreurs courantes (SSH, rsync, permissions, etc.).
+.IP \(bu 4
+\fBConfiguration Centralisée\fR: Toutes les options sont définies dans
+.B config.sh
+, avec des commentaires clairs pour une personnalisation facile.
+.IP \(bu 4
+\fBGestion Robuste des Points de Montage SSHFS\fR: Montages et démontages automatiques, avec gestion des points de montage occupés et nettoyage via
+.B trap EXIT
+.
+
+.SH OPTIONS
+Le script accepte des options et arguments en ligne de commande pour contrôler son comportement. Les configurations principales sont définies dans
+.B config.sh
+.
+
+.IP "\fB--dry-run\fR"
+Simule les opérations de sauvegarde (rsync, montage SSHFS, suppression) sans effectuer de modifications. Idéal pour tester la configuration ou diagnostiquer des problèmes.
+.IP "\fB--list\fR"
+Affiche la liste des catégories de sauvegardes disponibles (docs_eric, docs_fanou, docs_communs, projets, photos, docs_portable, musiques) et quitte sans exécuter de sauvegarde.
+.IP "\fBselection\fR..."
+Spécifie une ou plusieurs catégories de sauvegardes à exécuter, séparées par des espaces. Les sélections peuvent être des identifiants numériques (compatibilité) ou des noms explicites.
+.RS
+.IP "\fB1\fR ou \fBdocs_eric\fR"
+Sauvegarde les documents d'Eric (locale).
+.IP "\fB2\fR ou \fBdocs_fanou\fR"
+Sauvegarde les documents de Fanou (locale).
+.IP "\fB4\fR ou \fBdocs_communs\fR"
+Sauvegarde les documents communs (locale).
+.IP "\fB8\fR ou \fBprojets\fR"
+Sauvegarde les projets sur un serveur distant.
+.IP "\fB16\fR ou \fBphotos\fR"
+Sauvegarde les photos depuis une machine virtuelle distante.
+.IP "\fB32\fR ou \fBdocs_portable\fR"
+Sauvegarde les documents depuis un ordinateur portable distant.
+.IP "\fB64\fR ou \fBmusiques\fR"
+Sauvegarde les fichiers musicaux locaux.
+.IP "\fBall\fR"
+Exécute toutes les sauvegardes configurées.
+.RE
+Si aucun argument n'est fourni, le script utilise
+.B DEFAULT_SELECTIONS_SAUVEGARDES
+défini dans
+.B config.sh
+.
+
+.SH CONFIGURATION (Fichier `config.sh`)
+Le fichier
+.B config.sh
+, situé dans le même répertoire que
+.B sauvegarde.sh
+, centralise toutes les options. Il doit être adapté à votre environnement.
+
+.SS SECTION 1 - OPTIONS GLOBALES
+.IP "\fBDEFAULT_NOM_SCRIPT\fR=\fI"nom_du_script"\fR"
+Nom pour le fichier de verrouillage (.lock). Par défaut : "sauvegarde".
+.IP "\fBEMAIL_NOTIFICATION\fR=\fI"votre_email@example.com"\fR"
+Adresse(s) email pour les rapports. Laissez vide ("") pour désactiver.
+.IP "\fBESPACE_DISQUE_MIN_GO\fR=\fInombre_entier\fR"
+Espace disque minimum requis (en Go). Exemple : 5.
+.IP "\fBDEFAULT_RSYNC_OPTIONS\fR=\fI"options_rsync"\fR"
+Options rsync par défaut (ex: "-avh --exclude='.Trash'").
+.IP "\fBRSYNC_DELETE\fR=\fI0|1\fR"
+Active (1) ou désactive (0) l'option rsync --delete. Par défaut : 0.
+.IP "\fBDEFAULT_MODE_DEBOGAGE\fR=\fI0|1\fR"
+Mode débogage (0=off, 1=on pour logs détaillés).
+.IP "\fBDEFAULT_JOURNAUX_DESACTIVES\fR=\fI0|1\fR"
+Active (0) ou désactive (1) les logs, sauf pour les erreurs critiques.
+.IP "\fBDEFAULT_TYPE_CONNEXION_DISTANTE\fR=\fI0|1\fR"
+Méthode pour sauvegardes distantes : 0=SSHFS, 1=SSH direct.
+.IP "\fBDEFAULT_SELECTIONS_SAUVEGARDES\fR=\fI"identifiants"\fR"
+Sauvegardes par défaut (ex: "docs_eric photos" ou "all").
+.IP "\fBDEFAULT_MODE_INCREMENTAL\fR=\fI0|1\fR"
+Mode de sauvegarde : 0=complet, 1=incrémental.
+.IP "\fBACTIVERLOCK\fR=\fI0|1\fR"
+Active (1) ou désactive (0) le verrouillage via flock. Par défaut : 1.
+.IP "\fBCHEMIN_FONCTIONS_ERREUR\fR=\fI"$SCRIPT_DIR/fonctions_erreur.sh"\fR"
+Chemin vers le fichier de gestion d'erreurs.
+
+.SS SECTION 2 - ACCÈS SSH
+.IP "\fBuserVM\fR, \fBipVM\fR, \fBportVM\fR"
+Connexion SSH pour la machine virtuelle (ex: port 22).
+.IP "\fBuserPortable\fR, \fBipPortable\fR, \fBportPortable\fR, \fBpathPortable\fR"
+Connexion SSH pour l'ordinateur portable.
+.IP "\fBuserServeur\fR, \fBipServeur\fR, \fBportServeur\fR"
+Connexion SSH pour le serveur.
+
+.SS SECTION 3 - CHEMINS SOURCES ET DESTINATIONS
+.IP "\fBDEST_BASE_SAUVEGARDES\fR=\fI"/chemin/disque/"\fR"
+Point de montage du disque de sauvegarde.
+.IP "\fBUUID_DISQUE_SAUVEGARDE\fR=\fI"UUID"\fR"
+UUID du disque (obtenu via
+.B blkid
+).
+.IP "\fBSOURCE_LOCAL_...\fR"
+Chemins locaux (ex: SOURCE_LOCAL_DOCS_ERIC).
+.IP "\fBSOURCE_DIST_...\fR"
+Chemins distants (ex: SOURCE_DIST_PHOTOS_VM).
+.IP "\fBDEST_MAIN_...\fR"
+Destinations pour sauvegardes complètes.
+.IP "\fBDEST_INCR_BASE_...\fR"
+Destinations pour sauvegardes incrémentales (ex: /incremental-DocumentsEric/YYYY-MM-DD/).
+
+.SS SECTION 4 - POLITIQUES DE RÉTENTION
+.IP "\fBJOURS_RETENTION_CATEGORIE_QUOTIDIEN\fR=\fInombre_jours\fR"
+Rétention quotidienne (ex: 7 jours).
+.IP "\fBJOURS_RETENTION_CATEGORIE_HEBDO\fR=\fInombre_semaines\fR"
+Rétention hebdomadaire (ex: 4 semaines).
+.IP "\fBJOURS_RETENTION_CATEGORIE_MENSUEL\fR=\fInombre_mois\fR"
+Rétention mensuelle (ex: 12 mois).
+
+.SS SECTION 5 - POINTS DE MONTAGE SSHFS
+.IP "\fBBASE_MONTAGE_SSHFS\fR=\fI"/tmp/sshfs_mounts"\fR"
+Répertoire pour les montages SSHFS temporaires.
+.IP "\fBMONTAGE_SSHFS_...\fR"
+Points de montage locaux (ex: MONTAGE_SSHFS_PHOTOS).
+
+.SS SECTION 6 - LOGS
+.IP "\fBLOG_DIR\fR=\fI"/var/log/sauvegardes"\fR"
+Répertoire des logs (ex: sauvegarde_YYYY-MM-DD.log).
+.IP "\fBLAST_LOG_FILE\fR=\fI"$LOG_DIR/sauvegarde_dernier.log"\fR"
+Lien symbolique vers le dernier log.
+.IP "\fBLOCK_FILE\fR=\fI"/var/lock/$DEFAULT_NOM_SCRIPT.lock"\fR"
+Fichier de verrouillage.
+.IP "\fB/tmp/backup_fallback_errors.log\fR"
+Log de secours pour erreurs critiques.
+
+.SH UTILISATION
+1. \fBPré-requis\fR:
+   - Installez
+     .B rsync
+     ,
+     .B ssh
+     ,
+     .B sshfs
+     ,
+     .B mail
+     ,
+     .B flock
+     ,
+     .B findmnt
+     ,
+     .B blkid
+     ,
+     .B ping
+     ,
+     .B awk
+     ,
+     .B sed
+     .
+   - Configurez l'accès SSH sans mot de passe (via
+     .B ssh-keygen
+     et
+     .B ssh-copy-id
+     ).
+   - Montez le disque de sauvegarde sur
+     .B DEST_BASE_SAUVEGARDES
+     avec l'UUID correct.
+   - Assurez les permissions sur
+     .B LOG_DIR
+     et
+     .B LOCK_FILE
+     .
+2. \fBConfiguration\fR: Éditez
+   .B config.sh
+   avec vos paramètres (chemins, IPs, UUID, etc.).
+3. \fBExécution Manuelle\fR:
+   .RS
+   .IP \(bu 4
+   Toutes les sauvegardes par défaut :
+   .PP
+   .B ./sauvegarde.sh
+   .PP
+   .IP \(bu 4
+   Sauvegardes spécifiques :
+   .PP
+   .B ./sauvegarde.sh docs_eric photos
+   .PP
+   ou
+   .PP
+   .B ./sauvegarde.sh 1 16
+   .PP
+   .IP \(bu 4
+   Simulation :
+   .PP
+   .B ./sauvegarde.sh --dry-run all
+   .PP
+   .IP \(bu 4
+   Lister les sauvegardes :
+   .PP
+   .B ./sauvegarde.sh --list
+   .PP
+   .RE
+4. \fBExécution Automatisée (Cron)\fR:
+   .RS
+   .IP \(bu 4
+   Exemple pour 3h00 quotidien :
+   .PP
+   `0 3 * * * /chemin/vers/sauvegarde.sh all > /dev/null 2>&1`
+   .PP
+   Utilisez le chemin absolu et redirigez les sorties pour éviter les emails cron.
+   .RE
+
+.SH EXEMPLES PRATIQUES
+.SS Sauvegarde Quotidienne avec Simulation
+Éditez
+.B config.sh
+:
+.RS
+.IP "DEFAULT_SELECTIONS_SAUVEGARDES=\"docs_eric docs_fanou\""
+.RE
+Testez :
+.RS
+.B ./sauvegarde.sh --dry-run
+.RE
+
+.SS Sauvegarde Hebdomadaire Incrémentale
+Éditez
+.B config.sh
+:
+.RS
+.IP "DEFAULT_MODE_INCREMENTAL=1"
+.IP "JOURS_RETENTION_PROJETS_QUOTIDIEN=7"
+.IP "JOURS_RETENTION_PROJETS_HEBDO=4"
+.IP "JOURS_RETENTION_PROJETS_MENSUEL=12"
+.RE
+Cron (dimanches à 4h30) :
+.RS
+.IP "`30 4 * * 0 /chemin/vers/sauvegarde.sh projets`"
+.RE
+
+.SS Débogage Complet
+Éditez
+.B config.sh
+:
+.RS
+.IP "DEFAULT_MODE_DEBOGAGE=1"
+.RE
+Exécutez :
+.RS
+.B ./sauvegarde.sh --dry-run all
+.RE
+Vérifiez
+.B /var/log/sauvegardes/sauvegarde_dernier.log
+.
+
+.SH FICHIERS
+.IP "\fBsauvegarde.sh\fR"
+Script principal.
+.IP "\fBconfig.sh\fR"
+Configuration principale.
+.IP "\fBfonctions_erreur.sh\fR"
+Gestion des erreurs.
+.IP "\fB$LOG_DIR/sauvegarde_YYYY-MM-DD.log\fR"
+Logs quotidiens.
+.IP "\fB$LOG_DIR/sauvegarde_dernier.log\fR"
+Lien vers le dernier log.
+.IP "\fB/var/lock/$DEFAULT_NOM_SCRIPT.lock\fR"
+Fichier de verrouillage.
+.IP "\fB/tmp/backup_fallback_errors.log\fR"
+Log de secours.
+.IP "\fB~/.ssh/*\fR"
+Clés SSH et configuration.
+
+.SH ENVIRONNEMENT
+Le script utilise un environnement Bash standard. Assurez-vous que
+.B PATH
+inclut les exécutables requis. Configurez
+.B mail
+pour les notifications email.
+
+.SH CODES DE RETOUR
+.IP "\fB0\fR"
+Succès total.
+.IP "\fB1\fR"
+Erreur partielle (certaines sauvegardes ont échoué).
+.IP "\fB2\fR"
+Erreur fatale (ex: disque non trouvé, UUID incorrect).
+
+.SH DIAGNOSTICS ET DÉBOGAGE
+.SS 1. Étapes de Diagnostic Générales
+.IP \(bu 4
+\fBConsultez les Logs\fR:
+   .RS
+   .IP \(bu 4
+   Log principal :
+   .B /var/log/sauvegardes/sauvegarde_YYYY-MM-DD.log
+   .IP \(bu 4
+   Lien symbolique :
+   .B /var/log/sauvegardes/sauvegarde_dernier.log
+   .IP \(bu 4
+   Log de secours :
+   .B /tmp/backup_fallback_errors.log
+   .RE
+.IP \(bu 4
+\fBMode Débogage\fR: Définissez
+.B DEFAULT_MODE_DEBOGAGE=1
+dans
+.B config.sh
+et relancez.
+.IP \(bu 4
+\fBSimulation\fR: Utilisez
+.B --dry-run
+pour tester sans modifier.
+.IP \(bu 4
+\fBVérifiez config.sh\fR: Assurez-vous que les chemins, IPs, et UUID sont corrects.
+.IP \(bu 4
+\fBExécution Manuelle\fR:
+.B ./sauvegarde.sh all
+
+.SS 2. Problèmes Courants
+.IP \(bu 4
+\fBDisque Non Trouvé/UUID Incorrect\fR
+   .RS
+   .IP "Symptôme :"
+   Erreur fatale : "UUID attendu: ... n'est pas monté."
+   .IP "Action :"
+   .RS
+   .IP \(bu 4
+   Vérifiez le montage avec
+   .B lsblk -f
+   .IP \(bu 4
+   Confirmez
+   .B UUID_DISQUE_SAUVEGARDE
+   avec
+   .B blkid
+   .IP \(bu 4
+   Assurez les permissions sur
+   .B DEST_BASE_SAUVEGARDES
+   .RE
+   .RE
+.IP \(bu 4
+\fBEspace Disque Insuffisant\fR
+   .RS
+   .IP "Symptôme :"
+   Erreur : "Espace disque insuffisant."
+   .IP "Action :"
+   .RS
+   .IP \(bu 4
+   Libérez de l'espace ou ajustez
+   .B ESPACE_DISQUE_MIN_GO
+   .IP \(bu 4
+   Réduisez les rétentions dans
+   .B config.sh
+   .RE
+   .RE
+.IP \(bu 4
+\fBErreurs de Permissions\fR
+   .RS
+   .IP "Symptôme :"
+   "Permission denied" dans les logs.
+   .IP "Action :"
+   .RS
+   .IP \(bu 4
+   Vérifiez les permissions des sources/destinations (
+   .B chmod
+   ,
+   .B chown
+   ).
+   .IP \(bu 4
+   Assurez l'accès à
+   .B LOG_DIR
+   et
+   .B LOCK_FILE
+   .RE
+   .RE
+.IP \(bu 4
+\fBProblèmes SSH\fR
+   .RS
+   .IP "Symptôme :"
+   Erreurs SSH ("Connection refused", "Permission denied").
+   .IP "Action :"
+   .RS
+   .IP \(bu 4
+   Testez :
+   .B ssh -p <port> <utilisateur>@<ip>
+   .IP \(bu 4
+   Configurez les clés SSH avec
+   .B ssh-copy-id
+   .IP \(bu 4
+   Vérifiez le service SSH et les pare-feu.
+   .RE
+   .RE
+.IP \(bu 4
+\fBErreurs Rsync\fR
+   .RS
+   .IP "Symptôme :"
+   Codes d'erreur rsync (ex: 23, 24).
+   .IP "Action :"
+   .RS
+   .IP \(bu 4
+   Activez
+   .B DEFAULT_MODE_DEBOGAGE=1
+   .IP \(bu 4
+   Consultez
+   .B man rsync
+   pour les codes.
+   .IP \(bu 4
+   Testez rsync manuellement.
+   .RE
+   .RE
+.IP \(bu 4
+\fBVerrouillage\fR
+   .RS
+   .IP "Symptôme :"
+   "Une autre instance est en cours."
+   .IP "Action :"
+   .RS
+   .IP \(bu 4
+   Vérifiez avec
+   .B pgrep -f "sauvegarde.sh"
+   .IP \(bu 4
+   Supprimez
+   .B LOCK_FILE
+   si aucune instance n'est active.
+   .RE
+   .RE
+
+.SS 3. Techniques Avancées
+.IP \(bu 4
+\fBTracer l'Exécution\fR:
+.B bash -x ./sauvegarde.sh all 2>&1 | tee debug_trace.log
+.IP \(bu 4
+\fBOptions du Shell\fR:
+.B errexit
+,
+.B nounset
+,
+.B pipefail
+assurent robustesse.
+.IP \(bu 4
+\fBCodes de Retour\fR: Vérifiez
+.B $?
+et
+.B fonctions_erreur.sh
+.
+.IP \(bu 4
+\fBSSHFS\fR: Vérifiez les montages avec
+.B lsof +D /chemin/de/montage
+et
+.B fusermount -uz
+.
+
+.SH BUGS
+Signalez les bogues ou proposez des améliorations via le dépôt du projet ou le forum Ubuntu-fr. Fournissez les logs en mode débogage, la configuration, et les messages d'erreur.
+
+.SH CHANGELOG
+.IP "Version 6.1 Beta (2025-06-24)"
+.RS
+.IP \(bu 4
+Ajout de
+.B --dry-run
+pour simuler les sauvegardes.
+.IP \(bu 4
+Ajout de
+.B --list
+pour lister les sauvegardes.
+.IP \(bu 4
+Validation renforcée des variables (UUID, IP, chemins).
+.IP \(bu 4
+Option rsync
+.B --delete
+configurable via
+.B RSYNC_DELETE
+.
+.IP \(bu 4
+Vérification des chemins distants avant montage SSHFS.
+.IP \(bu 4
+Gestion des démontages SSHFS occupés avec retries.
+.IP \(bu 4
+Rapport email détaillé avec erreurs.
+.IP \(bu 4
+Journalisation des erreurs critiques même si les logs sont désactivés.
+.RE
+
+.SH AUTEURS
+Auteur original : enRIKO
+Contributions : geole, iznobe, Watael, steph810
+Améliorations pour qualité irréprochable : 2025-06-24
+
+.SH VOIR AUSSI
+.BR rsync (1),
+.BR ssh (1),
+.BR sshfs (1),
+.BR cron (8),
+.BR crontab (1),
+.BR mail (1),
+.BR flock (1),
+.BR findmnt (8),
+.BR blkid (8),
+.BR ping (8),
+.BR awk (1),
+.BR sed (1),
+.BR chmod (1),
+.BR chown (1),
+.BR lsblk (8)
