@@ -324,7 +324,7 @@ demonter_sshfs() {
     local mount_point="$1"
     log_debug "Tentative de demontage SSHFS de $mount_point"
     if mountpoint -q "$mount_point"; then
-        fusermount -u "$mount_point"
+        "$FUSERMOUNT_CMD" -u "$mount_point"
         local umount_exit_code=$?
         if [ $umount_exit_code -eq 0 ]; then
             log_success "SSHFS demonte avec succes."
@@ -365,7 +365,7 @@ cleanup_sshfs() {
     for mount_point in "$MONTAGE_SSHFS_PHOTOS" "$MONTAGE_SSHFS_IMAGES" "$MONTAGE_SSHFS_MUSIQUES"; do
         if mountpoint -q "$mount_point"; then
              log_info "Démontage de SSHFS sur $mount_point..."
-             fusermount -u "$mount_point" || fusermount3 -u "$mount_point"
+             "$FUSERMOUNT_CMD" -u "$mount_point"
         fi
     done
 }
