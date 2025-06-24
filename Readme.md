@@ -23,6 +23,14 @@ Organisez les fichiers dans un répertoire comme suit :
 
 ---
 
+## 1. Prérequis / Dépendances
+
+Avant de lancer le script, installez les paquets nécessaires :
+
+```bash
+sudo apt update && sudo apt install -y rsync sshfs fuse mailutils util-linux coreutils findutils gawk sed
+```
+
 ## ⚙️ Installation
 
 ### 1. Créer le dossier cible
