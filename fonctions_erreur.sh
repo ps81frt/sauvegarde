@@ -1,9 +1,14 @@
 # fonctions_erreur.sh
 # Fonctions de journalisation et de gestion des erreurs pour sauvegarde.sh
-# Version : 6.5 Beta (2025-06-24)
+# Version : 6.6 Beta (2025-06-24)
 # Auteur : enRIKO, modifié par geole, iznobe, Watael, steph810
 #
 # Changelog :
+# - 6.6 Beta (2025-06-24) :
+#   - Correction majeure : Utilisation des noms de variables français d'origine de config.sh.
+#   - Adaptation des vérifications de commandes externes ('command -v') pour utiliser les variables
+#     CHEMIN_RSYNC, CHEMIN_SSH, etc. définies dans config.sh (si elles sont non vides).
+#   - Amélioration de la traçabilité des erreurs 127 (Commande non trouvée).
 # - 6.5 Beta (2025-06-24) :
 #   - Robustesse accrue : Ajout de 'command -v' pour vérifier la présence des commandes externes (ssh, sshfs, fusermount, lsof, kill, mkdir) avant leur exécution.
 #   - Amélioration de la traçabilité des erreurs 127 (Commande non trouvée).
@@ -35,23 +40,28 @@
 # via 'source config.sh' dans le script appelant (sauvegarde.sh).
 log_info() {
     local message="$1"
-    # shellcheck disable=SC2154 # LOG_FILE est défini dans config.sh
+    # shellcheck disable=SC2154 # LOG_DIR est défini dans config.sh et utilisé pour construire LOG_FILE
+    # shellcheck disable=SC2154 # DEFAULT_JOURNAUX_DESACTIVES est défini dans config.sh
     if [[ "${DEFAULT_JOURNAUX_DESACTIVES:-0}" -eq 0 ]]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] $message" | tee -a "$LOG_FILE"
+        # Assure que LOG_FILE est construit si LOG_DIR est défini
+        local current_log_file="${LOG_DIR}/sauvegarde_$(date '+%Y%m%d').log"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] $message" | tee -a "$current_log_file"
     fi
 }
 
 log_warning() {
     local message="$1"
-    # shellcheck disable=SC2154 # LOG_FILE est défini dans config.sh
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [ATTENTION] $message" | tee -a "$LOG_FILE"
+    # shellcheck disable=SC2154 # LOG_DIR est défini dans config.sh et utilisé pour construire LOG_FILE
+    local current_log_file="${LOG_DIR}/sauvegarde_$(date '+%Y%m%d').log"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [ATTENTION] $message" | tee -a "$current_log_file"
     echo "$(date '+%Y-%m-%d %H:%M:%S') [ATTENTION] $message" >> "/tmp/backup_fallback_errors.log"
 }
 
 log_error() {
     local message="$1"
-    # shellcheck disable=SC2154 # LOG_FILE est défini dans config.sh
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [ERREUR] $message" | tee -a "$LOG_FILE"
+    # shellcheck disable=SC2154 # LOG_DIR est défini dans config.sh et utilisé pour construire LOG_FILE
+    local current_log_file="${LOG_DIR}/sauvegarde_$(date '+%Y%m%d').log"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [ERREUR] $message" | tee -a "$current_log_file"
     echo "$(date '+%Y-%m-%d %H:%M:%S') [ERREUR] $message" >> "/tmp/backup_fallback_errors.log"
 }
 
@@ -64,6 +74,7 @@ diagnostiquer_et_logger_erreur() {
     case "$code_erreur" in
         1) action_suggeree="Vérifiez les arguments passés au script et la syntaxe." ;;
         2) action_suggeree="Examinez le fichier config.sh. Une variable est manquante, vide ou a une valeur incorrecte." ;;
+        # shellcheck disable=SC2154 # LOG_DIR est défini dans config.sh
         3) action_suggeree="Assurez-vous que le répertoire de log ('$LOG_DIR') existe et est accessible en écriture." ;;
         # shellcheck disable=SC2154 # DEST_BASE_SAUVEGARDES, ESPACE_DISQUE_MIN_GO sont définis dans config.sh
         4) action_suggeree="Libérez de l'espace sur la destination ('$DEST_BASE_SAUVEGARDES') ou ajustez ESPACE_DISQUE_MIN_GO." ;;
@@ -79,10 +90,11 @@ diagnostiquer_et_logger_erreur() {
         12) action_suggeree="Échec de la création d'un répertoire de destination. Vérifiez les permissions du répertoire parent." ;;
         13) action_suggeree="La source spécifiée pour la sauvegarde n'existe pas, est vide, ou n'est pas accessible en lecture." ;;
         14) action_suggeree="Erreur interne de configuration pour la sélection de sauvegarde. Vérifiez les définitions SOURCE/DEST dans config.sh et le bloc 'case' dans sauvegarde.sh." ;;
-        15) action_suggeree="Échec de l'envoi de l'e-mail de notification. Vérifiez la configuration de votre serveur de messagerie (MTA) et l'adresse EMAIL_NOTIFICATION." ;;
+        # shellcheck disable=SC2154 # EMAIL_NOTIFICATION est défini dans config.sh
+        15) action_suggeree="Échec de l'envoi de l'e-mail de notification. Vérifiez la configuration de votre serveur de messagerie (MTA) et l'adresse '$EMAIL_NOTIFICATION'." ;;
         16) action_suggeree="La fonction de nettoyage des anciennes sauvegardes a échoué. Vérifiez la logique et les permissions du répertoire de sauvegarde." ;;
         17) action_suggeree="Échec de la vérification du chemin distant via SSH. Assurez-vous que le chemin existe sur l'hôte distant et que l'utilisateur SSH a les permissions." ;;
-        127) action_suggeree="Une commande externe requise par le script n'a pas été trouvée dans le PATH. Vérifiez que toutes les dépendances (rsync, ssh, sshfs, mailx/mail, fusermount, etc.) sont installées et accessibles." ;;
+        127) action_suggeree="Une commande externe requise par le script n'a pas été trouvée dans le PATH. Vérifiez que toutes les dépendances (rsync, ssh, sshfs, mailx/mail, fusermount, etc.) sont installées et accessibles. Ou que leur chemin est correctement configuré dans config.sh." ;;
         *) action_suggeree="Erreur inconnue. Référez-vous aux logs détaillés pour plus d'informations et le code de retour exact." ;;
     esac
 
@@ -135,7 +147,7 @@ valider_variable() {
                 if [[ ! -d "$valeur_var" && ! -f "$valeur_var" ]]; then
                     log_error "Le chemin '$valeur_var' pour '$nom_var' n'existe pas ou n'est ni un répertoire ni un fichier."
                     exit 2
-                F
+                fi
                 if [[ ! -r "$valeur_var" ]]; then
                     log_error "Le chemin '$valeur_var' pour '$nom_var' n'est pas accessible en lecture."
                     exit 2
@@ -144,7 +156,7 @@ valider_variable() {
             ;;
         int)
             if ! [[ "$valeur_var" =~ ^[0-9]+$ ]]; then
-                log_error "La valeur '$valeur_var' pour '$nom_var' n'est pas un entier valide."
+                log_error "La valeur '$valuer_var' pour '$nom_var' n'est pas un entier valide."
                 exit 2
             fi
             ;;
@@ -183,14 +195,18 @@ verifier_connexion_ssh() {
     valider_variable "IP SSH" "$ip" "ip"
     valider_variable "Port SSH" "$port" "port"
 
+    # shellcheck disable=SC2154 # CHEMIN_SSH est défini dans config.sh
+    local ssh_cmd="${CHEMIN_SSH:-ssh}" # Utilise CHEMIN_SSH si défini, sinon 'ssh'
+
     # Vérifier la présence de la commande 'ssh'
-    if ! command -v ssh >/dev/null 2>&1; then
-        log_error "La commande 'ssh' n'a pas été trouvée dans le PATH. Impossible de vérifier la connexion SSH."
+    if ! command -v "$ssh_cmd" >/dev/null 2>&1; then
+        log_error "La commande 'ssh' (ou chemin configuré: '$CHEMIN_SSH') n'a pas été trouvée dans le PATH. Impossible de vérifier la connexion SSH."
         diagnostiquer_et_logger_erreur 127 "Dépendance manquante: ssh."
     fi
 
     log_info "Vérification de la connexion SSH à $utilisateur@$ip:$port..."
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 -p "$port" "$utilisateur@$ip" exit >/dev/null 2>&1; then
+    # shellcheck disable=SC2154 # OPTIONS_COMMUNES_SSH est défini dans config.sh
+    if ! "$ssh_cmd" "${OPTIONS_COMMUNES_SSH:-}" -p "$port" "$utilisateur@$ip" exit >/dev/null 2>&1; then
         log_error "Impossible d'établir une connexion SSH à $utilisateur@$ip:$port. Vérifiez l'IP, le port, les identifiants SSH ou l'état du service SSH."
         diagnostiquer_et_logger_erreur 5 "Problème de connexion SSH."
     else
@@ -205,15 +221,19 @@ verifier_chemin_distant_ssh() {
     local port="$3"
     local chemin_distant="$4"
 
+    # shellcheck disable=SC2154 # CHEMIN_SSH est défini dans config.sh
+    local ssh_cmd="${CHEMIN_SSH:-ssh}" # Utilise CHEMIN_SSH si défini, sinon 'ssh'
+
     # Vérifier la présence de la commande 'ssh'
-    if ! command -v ssh >/dev/null 2>&1; then
-        log_error "La commande 'ssh' n'a pas été trouvée dans le PATH. Impossible de vérifier le chemin distant via SSH."
+    if ! command -v "$ssh_cmd" >/dev/null 2>&1; then
+        log_error "La commande 'ssh' (ou chemin configuré: '$CHEMIN_SSH') n'a pas été trouvée dans le PATH. Impossible de vérifier le chemin distant via SSH."
         diagnostiquer_et_logger_erreur 127 "Dépendance manquante: ssh (pour vérification chemin distant)."
     fi
 
     log_info "Vérification de l'existence du chemin distant '$chemin_distant' sur $ip..."
     # Exécute un 'test -d' (pour répertoire) ou 'test -f' (pour fichier) sur l'hôte distant
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 -p "$port" "$utilisateur@$ip" "test -d \"$chemin_distant\" || test -f \"$chemin_distant\"" >/dev/null 2>&1; then
+    # shellcheck disable=SC2154 # OPTIONS_COMMUNES_SSH est défini dans config.sh
+    if ! "$ssh_cmd" "${OPTIONS_COMMUNES_SSH:-}" -p "$port" "$utilisateur@$ip" "test -d \"$chemin_distant\" || test -f \"$chemin_distant\"" >/dev/null 2>&1; then
         log_error "Le chemin distant '$chemin_distant' n'existe pas ou n'est pas accessible sur $ip. Vérifiez le chemin et les permissions distantes."
         diagnostiquer_et_logger_erreur 17 "Chemin distant inaccessible via SSH."
     else
@@ -237,23 +257,28 @@ monter_sshfs() {
         return 0
     fi
 
+    # shellcheck disable=SC2154 # CHEMIN_SSHFS, CHEMIN_MOUNTPOINT, CHEMIN_MKDIR sont définis dans config.sh
+    local sshfs_cmd="${CHEMIN_SSHFS:-sshfs}"
+    local mountpoint_cmd="${CHEMIN_MOUNTPOINT:-mountpoint}"
+    local mkdir_cmd="${CHEMIN_MKDIR:-mkdir}"
+
     # Vérifier la présence de la commande 'sshfs'
-    if ! command -v sshfs >/dev/null 2>&1; then
-        log_error "La commande 'sshfs' n'a pas été trouvée dans le PATH. Impossible de monter SSHFS."
+    if ! command -v "$sshfs_cmd" >/dev/null 2>&1; then
+        log_error "La commande 'sshfs' (ou chemin configuré: '$CHEMIN_SSHFS') n'a pas été trouvée dans le PATH. Impossible de monter SSHFS."
         diagnostiquer_et_logger_erreur 127 "Dépendance manquante: sshfs."
     fi
     # Vérifier la présence de la commande 'mountpoint'
-    if ! command -v mountpoint >/dev/null 2>&1; then
-        log_error "La commande 'mountpoint' n'a pas été trouvée dans le PATH. Impossible de vérifier les points de montage."
+    if ! command -v "$mountpoint_cmd" >/dev/null 2>&1; then
+        log_error "La commande 'mountpoint' (ou chemin configuré: '$CHEMIN_MOUNTPOINT') n'a pas été trouvée dans le PATH. Impossible de vérifier les points de montage."
         diagnostiquer_et_logger_erreur 127 "Dépendance manquante: mountpoint."
     fi
 
     valider_variable "Point de montage local SSHFS" "$point_montage_local" "path" "true"
 
-    if mountpoint -q "$point_montage_local"; then
+    if "$mountpoint_cmd" -q "$point_montage_local"; then
         log_warning "Le point de montage '$point_montage_local' est déjà monté. Tentative de démontage avant de remonter."
         demonter_sshfs "$point_montage_local"
-        if mountpoint -q "$point_montage_local"; then
+        if "$mountpoint_cmd" -q "$point_montage_local"; then
             log_error "Impossible de démonter le point de montage existant '$point_montage_local'. Il est peut-être en cours d'utilisation."
             diagnostiquer_et_logger_erreur 6 "Point de montage SSHFS déjà en cours d'utilisation."
         fi
@@ -262,17 +287,18 @@ monter_sshfs() {
     if [[ ! -d "$point_montage_local" ]]; then
         log_info "Création du point de montage SSHFS: $point_montage_local"
         # Vérifier la présence de la commande 'mkdir'
-        if ! command -v mkdir >/dev/null 2>&1; then
-            log_error "La commande 'mkdir' n'a pas été trouvée dans le PATH. Impossible de créer le répertoire de montage."
+        if ! command -v "$mkdir_cmd" >/dev/null 2>&1; then
+            log_error "La commande 'mkdir' (ou chemin configuré: '$CHEMIN_MKDIR') n'a pas été trouvée dans le PATH. Impossible de créer le répertoire de montage."
             diagnostiquer_et_logger_erreur 127 "Dépendance manquante: mkdir."
         fi
-        mkdir -p "$point_montage_local" || { log_error "Impossible de créer le répertoire de montage $point_montage_local."; diagnostiquer_et_logger_erreur 12; }
+        "$mkdir_cmd" -p "$point_montage_local" || { log_error "Impossible de créer le répertoire de montage $point_montage_local."; diagnostiquer_et_logger_erreur 12; }
     fi
 
     log_info "Tentative de montage SSHFS de $utilisateur@$ip:$chemin_distant vers $point_montage_local"
+    # shellcheck disable=SC2154 # OPTIONS_COMMUNES_SSH est défini dans config.sh
     for (( i=1; i<=tentatives; i++ )); do
-        sshfs "$utilisateur@$ip:$chemin_distant" "$point_montage_local" -o port="$port",reconnect,no_readahead,default_permissions,allow_other >/dev/null 2>&1
-        if mountpoint -q "$point_montage_local"; then
+        "$sshfs_cmd" "$utilisateur@$ip:$chemin_distant" "$point_montage_local" -o "port=$port,reconnect,no_readahead,default_permissions,allow_other${OPTIONS_COMMUNES_SSH:+,}${OPTIONS_COMMUNES_SSH}" >/dev/null 2>&1
+        if "$mountpoint_cmd" -q "$point_montage_local"; then
             log_info "Montage SSHFS réussi ($point_montage_local)."
             return 0
         else
@@ -296,23 +322,30 @@ demonter_sshfs() {
         return 0
     fi
 
+    # shellcheck disable=SC2154 # CHEMIN_FUSEMOUNT, CHEMIN_MOUNTPOINT, CHEMIN_LSOF, CHEMIN_KILL sont définis dans config.sh
+    local fusermount_cmd="${CHEMIN_FUSEMOUNT:-fusermount}"
+    local mountpoint_cmd="${CHEMIN_MOUNTPOINT:-mountpoint}"
+    local lsof_cmd="${CHEMIN_LSOF:-lsof}"
+    local kill_cmd="${CHEMIN_KILL:-kill}"
+    # xargs est une commande standard, pas besoin de chemin explicite
+
     # Vérifier la présence de la commande 'fusermount'
-    if ! command -v fusermount >/dev/null 2>&1; then
-        log_error "La commande 'fusermount' n'a pas été trouvée dans le PATH. Impossible de démonter SSHFS."
+    if ! command -v "$fusermount_cmd" >/dev/null 2>&1; then
+        log_error "La commande 'fusermount' (ou chemin configuré: '$CHEMIN_FUSEMOUNT') n'a pas été trouvée dans le PATH. Impossible de démonter SSHFS."
         diagnostiquer_et_logger_erreur 127 "Dépendance manquante: fusermount."
     fi
     # Vérifier la présence de la commande 'mountpoint'
-    if ! command -v mountpoint >/dev/null 2>&1; then
-        log_error "La commande 'mountpoint' n'a pas été trouvée dans le PATH. Impossible de vérifier les points de montage."
+    if ! command -v "$mountpoint_cmd" >/dev/null 2>&1; then
+        log_error "La commande 'mountpoint' (ou chemin configuré: '$CHEMIN_MOUNTPOINT') n'a pas été trouvée dans le PATH. Impossible de vérifier les points de montage."
         diagnostiquer_et_logger_erreur 127 "Dépendance manquante: mountpoint."
     fi
 
 
-    if mountpoint -q "$point_montage_local"; then
+    if "$mountpoint_cmd" -q "$point_montage_local"; then
         log_info "Tentative de démontage de $point_montage_local..."
         for (( i=1; i<=tentatives; i++ )); do
-            fusermount -uz "$point_montage_local" >/dev/null 2>&1
-            if ! mountpoint -q "$point_montage_local"; then
+            "$fusermount_cmd" -uz "$point_montage_local" >/dev/null 2>&1
+            if ! "$mountpoint_cmd" -q "$point_montage_local"; then
                 log_info "Démontage SSHFS réussi ($point_montage_local)."
                 return 0
             else
@@ -321,11 +354,11 @@ demonter_sshfs() {
                 if [[ $i -eq $((tentatives-1)) ]]; then
                     log_warning "Le point de montage est toujours occupé. Tentative de trouver et tuer les processus utilisant $point_montage_local..."
                     # Vérifier si lsof et kill sont disponibles
-                    if ! command -v lsof >/dev/null 2>&1 || ! command -v kill >/dev/null 2>&1 || ! command -v xargs >/dev/null 2>&1; then
-                        log_error "Les commandes 'lsof', 'kill' ou 'xargs' n'ont pas été trouvées dans le PATH. Impossible de tuer les processus utilisant le point de montage."
+                    if ! command -v "$lsof_cmd" >/dev/null 2>&1 || ! command -v "$kill_cmd" >/dev/null 2>&1 || ! command -v xargs >/dev/null 2>&1; then
+                        log_error "Les commandes 'lsof', 'kill' ou 'xargs' (ou chemins configurés: '$CHEMIN_LSOF', '$CHEMIN_KILL') n'ont pas été trouvées dans le PATH. Impossible de tuer les processus utilisant le point de montage."
                         diagnostiquer_et_logger_erreur 127 "Dépendances manquantes: lsof, kill, xargs (pour démontage SSHFS)."
                     else
-                        lsof -t "$point_montage_local" | xargs -r kill -9
+                        "$lsof_cmd" -t "$point_montage_local" | xargs -r "$kill_cmd" -9
                         sleep 2
                     fi
                 fi
