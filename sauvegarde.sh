@@ -73,24 +73,22 @@ log_info "Fichier de configuration '$SCRIPT_DIR/config.sh' source avec succes."
 
 # --- VERROUILLAGE DU SCRIPT (Méthode flock) ---
 # Empêche l'exécution simultanée de plusieurs instances du script.
-LOCK_DIR="/var/lock"
-if ! mkdir -p "$LOCK_DIR"; then
-    log_error "Impossible de creer ou acceder au repertoire de verrouillage : $LOCK_DIR. Verifiez les permissions."
-    exit 1
+if [[ "$ACTIVERLOCK" -eq 1 ]]; then
+    LOCK_DIR="/var/lock"
+    if ! mkdir -p "$LOCK_DIR"; then
+        log_error "Impossible de creer ou acceder au repertoire de verrouillage : $LOCK_DIR. Verifiez les permissions."
+        exit 1
+    fi
+    LOCK_FILE="$LOCK_DIR/${DEFAULT_NOM_SCRIPT:-sauvegarde}.lock"
+    exec 200>"$LOCK_FILE" || { log_error "Impossible d'ouvrir le fichier de verrouillage: $LOCK_FILE. Verifiez les permissions ou l'integrité du systeme de fichiers."; exit 1; }
+    if ! flock -n 200; then
+        log_error "Une autre instance du script de sauvegarde est deja en cours d'execution. Abandon."
+        exit 1
+    fi
+    log_success "Verrou acquis sur le fichier: $LOCK_FILE"
+else
+    log_warning "Le verrouillage multi-instance (flock) est DESACTIVE via config.sh. ATTENTION aux executions concurrentes!"
 fi
-
-LOCK_FILE="$LOCK_DIR/${DEFAULT_NOM_SCRIPT:-sauvegarde}.lock"
-
-# Tente d'acquérir un verrou non-bloquant sur le fichier.
-# Le descripteur de fichier 200 est arbitrairement choisi.
-exec 200>"$LOCK_FILE" || { log_error "Impossible d'ouvrir le fichier de verrouillage: $LOCK_FILE. Verifiez les permissions ou l'integrité du systeme de fichiers."; exit 1; }
-
-if ! flock -n 200; then
-    log_error "Une autre instance du script de sauvegarde est deja en cours d'execution. Abandon."
-    exit 1
-fi
-log_success "Verrou acquis sur le fichier: $LOCK_FILE"
-
 # --- FONCTIONS GÉNÉRALES ---
 
 # Check des dependences
